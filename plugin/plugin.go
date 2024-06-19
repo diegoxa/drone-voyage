@@ -33,7 +33,7 @@ func Exec(ctx context.Context, args Args) error {
 	logrus.Debugf("Commit Author: %s <%s>", args.CommitAuthor, args.CommitEmail)
 
 	logrus.Printf("Image to Deploy: %s", args.Image)
-	logrus.Printf("Deployment File: %s", args.DeploymentFiles)
+	logrus.Printf("Deployment Files: %s", args.DeploymentFiles)
 	logrus.Printf("Conatiner Name: %s", args.ContainerName)
 
 	repo := cloneRepo(

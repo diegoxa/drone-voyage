@@ -23,6 +23,8 @@ type Repo struct {
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+var publicKeys *ssh.PublicKeys
+
 func NewGitRepo(gitAddress, committerName, committerEmail, sshKey string) *Repo {
 	// in case key is formatted as single line with \n breaks
 	key := strings.Replace(sshKey, "\\n", "\n", -1)
@@ -49,7 +51,8 @@ func (project *Repo) Clone() {
 	logrus.Debugf("temp dir: %s\n", project.localDir)
 	project.Cleanup()
 
-	signer, err := ssh.NewPublicKeys("git", []byte(project.sshKey), "")
+	var err error
+	publicKeys, err = ssh.NewPublicKeys("git", []byte(project.sshKey), "")
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -58,7 +61,7 @@ func (project *Repo) Clone() {
 		URL:      project.RepoGit,
 		Progress: os.Stdout,
 		Depth:    1,
-		Auth:     signer,
+		Auth:     publicKeys,
 	})
 	if err != nil {
 		logrus.Fatal(err)
@@ -91,7 +94,9 @@ func (project *Repo) CommitAndPush() {
 		logrus.Fatal(err)
 	}
 
-	err = project.repository.Push(&git.PushOptions{})
+	err = project.repository.Push(&git.PushOptions{
+		Auth: publicKeys,
+	})
 	if err != nil {
 		logrus.Fatal(err)
 	}
