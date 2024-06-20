@@ -8,6 +8,7 @@ The following settings changes this plugin's behavior.
 * github_ssh_key (required) Github private key.
 * image (required) Docker image name, i.e.: diegoxa/voyager:v1.0
 * deployment_files (required) One or many comma separated files
+* container_name (optional) The container name under deployment to apply the image change. Ideal when you have multiple containers in a manifest file but you only need to update a specific container.
 * commit_author (required) Author to be used on the commit.
 * commit_email (required) Email to be used on the commit.
 * log_level (optional) Log level. [info,debug]
@@ -23,10 +24,11 @@ steps:
   image: diegoxa/voyage
   pull: if-not-exists
   settings:
-    github_repo: git@github.com/user/repo.git
+    github_repo: git@github.com:user/repo.git
     github_ssh_key:
       from_secret: deployment_ssh_key
     image: diegoxa/voyage:v1-rc.2
+    deployment_files: k8s/prod/deployment.yaml,k8s/prod/migration.yaml
     commit_author: Voyage
     commit_email: voyage@email.com
     log_level: info
