@@ -7,7 +7,7 @@ package main
 import (
 	"context"
 
-	"github.com/diegoxa/voyage/plugin"
+	"github.com/diegoxa/drone-voyage/plugin"
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"

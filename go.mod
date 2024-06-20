@@ -1,4 +1,4 @@
-module github.com/diegoxa/voyage
+module github.com/diegoxa/drone-voyage
 
 go 1.22.0
 
