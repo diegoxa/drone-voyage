@@ -1,4 +1,4 @@
-image: diegoxa/voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}
+image: diegoxa/drone-voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}
 {{#if build.tags}}
 tags:
 {{#each build.tags}}
@@ -7,24 +7,24 @@ tags:
 {{/if}}
 manifests:
   -
-    image: diegoxa/voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-amd64
+    image: diegoxa/drone-voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-amd64
     platform:
       architecture: amd64
       os: linux
   -
-    image: diegoxa/voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm64
+    image: diegoxa/drone-voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm64
     platform:
       variant: v8
       architecture: arm64
       os: linux
   -
-    image: diegoxa/voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm
+    image: diegoxa/drone-voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm
     platform:
       variant: v7
       architecture: arm
       os: linux
   -
-    image: diegoxa/voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm
+    image: diegoxa/drone-voyage:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm
     platform:
       variant: v6
       architecture: arm

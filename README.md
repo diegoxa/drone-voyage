@@ -6,7 +6,7 @@ The following settings changes this plugin's behavior.
 
 * github_repo (required) Github repository containing the k8s manifest files.
 * github_ssh_key (required) Github private key.
-* image (required) Docker image name, i.e.: diegoxa/voyager:v1.0
+* image (required) Docker image name, i.e.: diegoxa/drone-voyager:v1.0
 * deployment_files (required) One or many comma separated files
 * container_name (optional) The container name under deployment to apply the image change. Ideal when you have multiple containers in a manifest file but you only need to update a specific container.
 * commit_author (required) Author to be used on the commit.
@@ -20,14 +20,14 @@ kind: pipeline
 name: default
 
 steps:
-- name: run diegoxa/voyage plugin
-  image: diegoxa/voyage
+- name: run diegoxa/drone-voyage plugin
+  image: diegoxa/drone-voyage
   pull: if-not-exists
   settings:
     github_repo: git@github.com:user/repo.git
     github_ssh_key:
       from_secret: deployment_ssh_key
-    image: diegoxa/voyage:v1-rc.2
+    image: diegoxa/drone-voyage:v1-rc.2
     deployment_files: k8s/prod/deployment.yaml,k8s/prod/migration.yaml
     commit_author: Voyage
     commit_email: voyage@email.com
@@ -45,7 +45,7 @@ scripts/build.sh
 Build the plugin image:
 
 ```text
-docker build -t diegoxa/voyage -f docker/Dockerfile .
+docker build -t diegoxa/drone-voyage -f docker/Dockerfile .
 ```
 
 # Testing
@@ -62,5 +62,5 @@ docker run --rm \
   -e PLUGIN_COMMIT_EMAIL=jdoe@moon.com \
   -e PLUGIN_LOG_LEVEL=info \
   -w /drone/src \
-  diegoxa/voyage
+  diegoxa/drone-voyage
 ```
