@@ -1,11 +1,16 @@
-A plugin to update images within k8s manifest files on remote git repositories.
+Drone CI Plugin for updating image attribute in kubernetes deployment manifest files on remote GitHub repository
 
 # Usage
 
 The following settings changes this plugin's behavior.
 
-* param1 (optional) does something.
-* param2 (optional) does something different.
+* github_repo (required) Github repository containing the k8s manifest files.
+* github_ssh_key (required) Github private key.
+* image (required) Docker image name, i.e.: diegoxa/voyager:v1.0
+* deployment_files (required) One or many comma separated files
+* commit_author (required) Author to be used on the commit.
+* commit_email (required) Email to be used on the commit.
+* log_level (optional) Log level. [info,debug]
 
 Below is an example `.drone.yml` that uses this plugin.
 
@@ -18,8 +23,13 @@ steps:
   image: diegoxa/voyage
   pull: if-not-exists
   settings:
-    param1: foo
-    param2: bar
+    github_repo: git@github.com/user/repo.git
+    github_ssh_key:
+      from_secret: deployment_ssh_key
+    image: diegoxa/voyage:v1-rc.2
+    commit_author: Voyage
+    commit_email: voyage@email.com
+    log_level: info
 ```
 
 # Building
@@ -49,10 +59,6 @@ docker run --rm \
   -e PLUGIN_COMMIT_AUTHOR=John Doe \
   -e PLUGIN_COMMIT_EMAIL=jdoe@moon.com \
   -e PLUGIN_LOG_LEVEL=info \
-  -e DRONE_COMMIT_SHA=8f51ad7884c5eb69c11d260a31da7a745e6b78e2 \
-  -e DRONE_COMMIT_BRANCH=main \
-  -e DRONE_BUILD_NUMBER=43 \
-  -e DRONE_BUILD_STATUS=success \
   -w /drone/src \
-diegoxa/voyage
+  diegoxa/voyage
 ```
