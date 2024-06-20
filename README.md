@@ -1,4 +1,6 @@
-Drone CI Plugin for updating image attribute in kubernetes deployment manifest files on remote GitHub repository
+Drone CI Plugin for updating image attribute in kubernetes deployment manifest files on a remote GitHub repository.
+
+Ideal if you use ArgoCD for managing deployments.
 
 # Usage
 
