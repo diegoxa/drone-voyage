@@ -1,3 +1,7 @@
+<p align="center">
+<img src="./docs/voyage.svg" width="150" height="150">
+</p>
+
 Drone CI Plugin for updating image attribute in kubernetes deployment manifest files on a remote GitHub repository.
 
 Ideal if you use ArgoCD for managing deployments.
@@ -10,7 +14,7 @@ The following settings changes this plugin's behavior.
 * github_ssh_key (required) Github private key.
 * image (required) Docker image name, i.e.: diegoxa/drone-voyager:v1.0
 * deployment_files (required) One or many comma separated files
-* container_name (optional) The container name under deployment to apply the image change. Ideal when you have multiple containers in a manifest file but you only need to update a specific container.
+* container_name (optional) The container name under deployment to apply the image change. Ideal when you have multiple containers in a manifest file, but you only need to update a specific container.
 * commit_author (required) Author to be used on the commit.
 * commit_email (required) Email to be used on the commit.
 * log_level (optional) Log level. [info,debug]
