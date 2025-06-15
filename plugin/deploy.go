@@ -82,7 +82,7 @@ func (m *CronJobManifest) GetContainers() ([]*coreV1.Container, error) {
 	return containers, nil
 }
 
-func SetImage(m GetContainersInterface, image, filterByContainerName string) (bool, error) {
+func SetImage(m GetContainersInterface, image string, filterByContainerNames []string) (bool, error) {
 	c, err := m.GetContainers()
 	if err != nil {
 		return false, err
@@ -90,9 +90,16 @@ func SetImage(m GetContainersInterface, image, filterByContainerName string) (bo
 
 	changeApplied := false
 	for i := 0; i < len(c); i++ {
-		if filterByContainerName != "" {
-			if c[i].Name != filterByContainerName {
-				logrus.Infof("filter by container: %s, skipping container: %s", filterByContainerName, c[i].Name)
+		if len(filterByContainerNames) > 0 {
+			found := false
+			for _, name := range filterByContainerNames {
+				if c[i].Name == name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				logrus.Infof("filter by containers: %v, skipping container: %s", filterByContainerNames, c[i].Name)
 				continue
 			}
 		}
@@ -108,20 +115,20 @@ func SetImage(m GetContainersInterface, image, filterByContainerName string) (bo
 	return changeApplied, nil
 }
 
-func UpdateImage(gitRepo *Repo, deploymentFiles []string, imageName, containerName string) bool {
+func UpdateImage(gitRepo *Repo, deploymentFiles []string, imageName string, containerNames []string) bool {
 	logrus.Debugln("updating images...")
 
 	patch := false
 	for _, manifestFile := range deploymentFiles {
 		logrus.Debugf("updating deployment file %s\n", manifestFile)
-		if patchContainerImage(manifestFile, gitRepo, imageName, containerName) {
+		if patchContainerImage(manifestFile, gitRepo, imageName, containerNames) {
 			patch = true
 		}
 	}
 	return patch
 }
 
-func patchContainerImage(deploymentFile string, repo *Repo, newImageName, containerName string) bool {
+func patchContainerImage(deploymentFile string, repo *Repo, newImageName string, containerNames []string) bool {
 	manifestFile := fmt.Sprintf("%s/%s", repo.GetLocalDir(), deploymentFile)
 
 	// Read the YAML file
@@ -165,7 +172,7 @@ func patchContainerImage(deploymentFile string, repo *Repo, newImageName, contai
 	}
 
 	logrus.Infof("manifest: `%s`", deploymentFile)
-	success, setImageErr := SetImage(maf, newImageName, containerName)
+	success, setImageErr := SetImage(maf, newImageName, containerNames)
 	if setImageErr != nil {
 		logrus.Fatalf("error setting image: %s", setImageErr)
 	}
