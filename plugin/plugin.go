@@ -21,7 +21,7 @@ type Args struct {
 	GithubSSHKey    string   `envconfig:"PLUGIN_GITHUB_SSH_KEY"`
 	Image           string   `envconfig:"PLUGIN_IMAGE"`
 	DeploymentFiles []string `envconfig:"PLUGIN_DEPLOYMENT_FILES"`
-	ContainerName   string   `envconfig:"PLUGIN_CONTAINER_NAME"`
+	ContainerNames  []string `envconfig:"PLUGIN_CONTAINER_NAMES"`
 	CommitAuthor    string   `envconfig:"PLUGIN_COMMIT_AUTHOR"`
 	CommitEmail     string   `envconfig:"PLUGIN_COMMIT_EMAIL"`
 }
@@ -34,7 +34,7 @@ func Exec(ctx context.Context, args Args) error {
 
 	logrus.Printf("Image to Deploy: %s", args.Image)
 	logrus.Printf("Deployment Files: %s", args.DeploymentFiles)
-	logrus.Printf("Conatiner Name: %s", args.ContainerName)
+	logrus.Printf("Container Names: %v", args.ContainerNames)
 
 	repo := cloneRepo(
 		args.GithubRepo,
@@ -44,7 +44,7 @@ func Exec(ctx context.Context, args Args) error {
 	)
 	defer repo.Cleanup()
 
-	done := UpdateImage(repo, args.DeploymentFiles, args.Image, args.ContainerName)
+	done := UpdateImage(repo, args.DeploymentFiles, args.Image, args.ContainerNames)
 
 	if done {
 		repo.CommitAndPush()

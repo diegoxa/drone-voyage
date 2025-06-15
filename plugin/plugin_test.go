@@ -24,7 +24,7 @@ func TestPlugin(t *testing.T) {
 
 	log.Println(repo.GetLocalDir())
 
-	done := UpdateImage(repo, []string{"folder/deployment.yaml", "folder2/migration-job.yaml"}, "docker/test:1", "")
+	done := UpdateImage(repo, []string{"folder/deployment.yaml", "folder2/migration-job.yaml"}, "docker/test:1", []string{})
 	if !done {
 		t.Log("no deployment files were updated")
 	}

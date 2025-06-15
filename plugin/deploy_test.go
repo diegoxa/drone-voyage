@@ -129,7 +129,8 @@ func TestSetImage(t *testing.T) {
 		t.Error(e)
 	}
 
-	success, err := SetImage(&m, "new-image:2", "")
+	// Test with empty filter (should update all containers)
+	success, err := SetImage(&m, "new-image:2", []string{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -141,7 +142,8 @@ func TestSetImage(t *testing.T) {
 		t.Error("image was not updated")
 	}
 
-	success, err = SetImage(&m, "new-image:3", "test")
+	// Test with single container filter
+	success, err = SetImage(&m, "new-image:3", []string{"test"})
 	if err != nil {
 		t.Error(err)
 	}
@@ -158,13 +160,32 @@ func TestSetImage(t *testing.T) {
 		t.Error("image was not updated")
 	}
 
-	success, err = SetImage(&m, "new-image:10", "not-exist")
+	// Test with non-existent container
+	success, err = SetImage(&m, "new-image:10", []string{"not-exist"})
 	if err != nil {
 		t.Error(err)
 	}
 
 	if success {
 		t.Error("container was not found yet a change was applied")
+	}
+
+	// Test with multiple container filters
+	success, err = SetImage(&m, "new-image:4", []string{"nginx", "test"})
+	if err != nil {
+		t.Error(err)
+	}
+
+	if !success {
+		t.Error("change was not applied")
+	}
+
+	if m.Spec.Template.Spec.Containers[0].Image != "new-image:4" {
+		t.Error("image was not updated for nginx container")
+	}
+
+	if m.Spec.Template.Spec.Containers[1].Image != "new-image:4" {
+		t.Error("image was not updated for test container")
 	}
 
 	j := jobYaml
@@ -174,7 +195,8 @@ func TestSetImage(t *testing.T) {
 		t.Error(e)
 	}
 
-	success, err = SetImage(&job, "new-image:2", "")
+	// Test with empty filter on job
+	success, err = SetImage(&job, "new-image:2", []string{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -186,12 +208,56 @@ func TestSetImage(t *testing.T) {
 		t.Error("image was not updated")
 	}
 
-	success, err = SetImage(&job, "new-image:2", "other-container")
+	// Test with non-existent container on job
+	success, err = SetImage(&job, "new-image:2", []string{"other-container"})
 	if err != nil {
 		t.Error(err)
 	}
 	if success {
 		t.Error("change was applied incorrectly")
+	}
+
+	// Test with cronjob
+	cj := cronjobYaml
+	var cronjob CronJobManifest
+	e = yaml.Unmarshal([]byte(cj), &cronjob)
+	if e != nil {
+		t.Error(e)
+	}
+
+	// Test with empty filter on cronjob
+	success, err = SetImage(&cronjob, "new-image:3", []string{})
+	if err != nil {
+		t.Error(err)
+	}
+	if !success {
+		t.Error("change was not applied")
+	}
+
+	if cronjob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image != "new-image:3" {
+		t.Error("image was not updated in cronjob")
+	}
+
+	// Test with specific container name on cronjob
+	success, err = SetImage(&cronjob, "new-image:4", []string{"hello"})
+	if err != nil {
+		t.Error(err)
+	}
+	if !success {
+		t.Error("change was not applied")
+	}
+
+	if cronjob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image != "new-image:4" {
+		t.Error("image was not updated in cronjob with container filter")
+	}
+
+	// Test with non-existent container on cronjob
+	success, err = SetImage(&cronjob, "new-image:5", []string{"non-existent"})
+	if err != nil {
+		t.Error(err)
+	}
+	if success {
+		t.Error("change was applied incorrectly for non-existent container in cronjob")
 	}
 }
 
@@ -206,7 +272,7 @@ func TestPatchContainerImage(t *testing.T) {
 	_ = os.Mkdir("/tmp/"+folder, 0755)
 	_ = os.WriteFile("/tmp/"+folder+"/test1.yaml", []byte(deploymentYaml), 0644)
 
-	success := patchContainerImage("test1.yaml", repo, "a:1", "nginx")
+	success := patchContainerImage("test1.yaml", repo, "a:1", []string{"nginx"})
 
 	if !success {
 		t.Error("patchContainerImage failed")
@@ -237,7 +303,7 @@ func TestUpdateImage(t *testing.T) {
 	_ = os.WriteFile("/tmp/"+folder+"/test1.yaml", []byte(deploymentYaml), 0644)
 	_ = os.WriteFile("/tmp/"+folder+"/test2.yaml", []byte(jobYaml), 0644)
 
-	success := UpdateImage(repo, []string{"test1.yaml", "test2.yaml"}, "new-image:v123", "")
+	success := UpdateImage(repo, []string{"test1.yaml", "test2.yaml"}, "new-image:v123", []string{})
 	if !success {
 		t.Error("no updates were made")
 	}
