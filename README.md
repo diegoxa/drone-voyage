@@ -61,6 +61,23 @@ Build the plugin image:
 docker build -t diegoxa/drone-voyage -f docker/Dockerfile .
 ```
 
+`docker/Dockerfile` cross-compiles the Go binary for whatever platform is
+requested (via buildx's `TARGETOS`/`TARGETARCH`/`TARGETVARIANT`), so the same
+file builds `linux/amd64`, `linux/arm64` and `linux/arm/v7` images, e.g.:
+
+```text
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -f docker/Dockerfile .
+```
+
+# CI
+
+* `.github/workflows/test.yml` runs `go build`/`go vet`/`go test` on every
+  pull request and on pushes to `main`.
+* `.github/workflows/docker-build.yml` builds and pushes the multi-arch
+  image (`linux/amd64`, `linux/arm64`, `linux/arm/v7`) to
+  `diegoxa/drone-voyage` on Docker Hub: pushes to `main` publish `:latest`,
+  and pushing a tag publishes both `:<tag>` and `:latest`.
+
 # Testing
 
 Execute the plugin from your current working directory:
