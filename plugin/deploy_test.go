@@ -272,7 +272,10 @@ func TestPatchContainerImage(t *testing.T) {
 	_ = os.Mkdir("/tmp/"+folder, 0755)
 	_ = os.WriteFile("/tmp/"+folder+"/test1.yaml", []byte(deploymentYaml), 0644)
 
-	success := patchContainerImage("test1.yaml", repo, "a:1", []string{"nginx"})
+	success, err := patchContainerImage("test1.yaml", repo, "a:1", []string{"nginx"})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if !success {
 		t.Error("patchContainerImage failed")
@@ -303,7 +306,10 @@ func TestUpdateImage(t *testing.T) {
 	_ = os.WriteFile("/tmp/"+folder+"/test1.yaml", []byte(deploymentYaml), 0644)
 	_ = os.WriteFile("/tmp/"+folder+"/test2.yaml", []byte(jobYaml), 0644)
 
-	success := UpdateImage(repo, []string{"test1.yaml", "test2.yaml"}, "new-image:v123", []string{})
+	success, err := UpdateImage(repo, []string{"test1.yaml", "test2.yaml"}, "new-image:v123", []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !success {
 		t.Error("no updates were made")
 	}
