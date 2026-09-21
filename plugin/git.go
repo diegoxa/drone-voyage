@@ -3,6 +3,7 @@ package plugin
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"strings"
@@ -68,7 +69,7 @@ func (project *Repo) Clone() error {
 
 	project.repository, err = git.PlainClone(project.localDir, false, &git.CloneOptions{
 		URL:          project.RepoGit,
-		Progress:     os.Stdout,
+		Progress:     progressWriter(),
 		Depth:        1,
 		SingleBranch: true,
 		Tags:         git.NoTags,
@@ -84,6 +85,18 @@ func (project *Repo) Clone() error {
 	}
 	project.branch = head.Name().Short()
 
+	return nil
+}
+
+// progressWriter enables go-git's clone progress (server-side "Counting
+// objects"/"Compressing objects" messages) only at debug/trace level. CI
+// logs aren't a TTY, so the carriage returns that let a terminal overwrite
+// one progress line instead print one line per percentage tick, flooding a
+// normal run's logs; debug/trace runs still get the detail.
+func progressWriter() io.Writer {
+	if logrus.GetLevel() >= logrus.DebugLevel {
+		return os.Stdout
+	}
 	return nil
 }
 
