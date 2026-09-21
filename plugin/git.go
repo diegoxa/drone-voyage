@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/sirupsen/logrus"
 )
@@ -23,11 +25,10 @@ type Repo struct {
 	CommitterEmail string
 	repository     *git.Repository
 	branch         string
+	auth           transport.AuthMethod
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-var publicKeys *ssh.PublicKeys
 
 func NewGitRepo(gitAddress, committerName, committerEmail, sshKey string) *Repo {
 	// in case key is formatted as single line with \n breaks
@@ -59,11 +60,11 @@ func (project *Repo) Clone() error {
 	logrus.Debugf("temp dir: %s\n", project.localDir)
 	project.Cleanup()
 
-	var err error
-	publicKeys, err = ssh.NewPublicKeys("git", []byte(project.sshKey), "")
+	auth, err := buildAuth(project.sshKey)
 	if err != nil {
-		return fmt.Errorf("failed to parse ssh key: %w", err)
+		return err
 	}
+	project.auth = auth
 
 	project.repository, err = git.PlainClone(project.localDir, false, &git.CloneOptions{
 		URL:          project.RepoGit,
@@ -71,7 +72,7 @@ func (project *Repo) Clone() error {
 		Depth:        1,
 		SingleBranch: true,
 		Tags:         git.NoTags,
-		Auth:         publicKeys,
+		Auth:         project.auth,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to clone %s: %w", project.RepoGit, err)
@@ -84,6 +85,21 @@ func (project *Repo) Clone() error {
 	project.branch = head.Name().Short()
 
 	return nil
+}
+
+// buildAuth builds SSH key auth when a key is provided. An empty key means
+// no auth is configured, which is what a local filesystem remote (used in
+// tests) or an already-authenticated URL needs.
+func buildAuth(sshKey string) (transport.AuthMethod, error) {
+	if sshKey == "" {
+		return nil, nil
+	}
+
+	keys, err := ssh.NewPublicKeys("git", []byte(sshKey), "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ssh key: %w", err)
+	}
+	return keys, nil
 }
 
 func (project *Repo) CommitAndPush() error {
@@ -110,7 +126,7 @@ func (project *Repo) CommitAndPush() error {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
-	if err := project.repository.Push(&git.PushOptions{Auth: publicKeys}); err != nil {
+	if err := project.repository.Push(&git.PushOptions{Auth: project.auth}); err != nil {
 		return fmt.Errorf("failed to push: %w", err)
 	}
 
@@ -132,9 +148,17 @@ func IsRemoteAheadErr(err error) bool {
 // rebases its retry on whatever is on the remote right now: fetch, reset,
 // then reapply the same image edit and commit again.
 func (project *Repo) SyncWithRemote() error {
+	// Clone was made with SingleBranch, which go-git tracks against
+	// refs/remotes/origin/HEAD rather than the branch name. Fetch with an
+	// explicit refspec instead of relying on that default, so the branch's
+	// remote-tracking ref is always the one that gets updated here.
+	remoteTrackingRef := plumbing.NewRemoteReferenceName("origin", project.branch)
+	refSpec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", project.branch, remoteTrackingRef))
+
 	err := project.repository.Fetch(&git.FetchOptions{
 		RemoteName: "origin",
-		Auth:       publicKeys,
+		RefSpecs:   []config.RefSpec{refSpec},
+		Auth:       project.auth,
 		Depth:      1,
 		Force:      true,
 		Tags:       git.NoTags,
@@ -143,7 +167,7 @@ func (project *Repo) SyncWithRemote() error {
 		return fmt.Errorf("failed to fetch latest: %w", err)
 	}
 
-	remoteRef, err := project.repository.Reference(plumbing.NewRemoteReferenceName("origin", project.branch), true)
+	remoteRef, err := project.repository.Reference(remoteTrackingRef, true)
 	if err != nil {
 		return fmt.Errorf("failed to resolve origin/%s: %w", project.branch, err)
 	}
