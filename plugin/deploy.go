@@ -115,33 +115,37 @@ func SetImage(m GetContainersInterface, image string, filterByContainerNames []s
 	return changeApplied, nil
 }
 
-func UpdateImage(gitRepo *Repo, deploymentFiles []string, imageName string, containerNames []string) bool {
+func UpdateImage(gitRepo *Repo, deploymentFiles []string, imageName string, containerNames []string) (bool, error) {
 	logrus.Debugln("updating images...")
 
 	patch := false
 	for _, manifestFile := range deploymentFiles {
 		logrus.Debugf("updating deployment file %s\n", manifestFile)
-		if patchContainerImage(manifestFile, gitRepo, imageName, containerNames) {
+		applied, err := patchContainerImage(manifestFile, gitRepo, imageName, containerNames)
+		if err != nil {
+			return false, err
+		}
+		if applied {
 			patch = true
 		}
 	}
-	return patch
+	return patch, nil
 }
 
-func patchContainerImage(deploymentFile string, repo *Repo, newImageName string, containerNames []string) bool {
+func patchContainerImage(deploymentFile string, repo *Repo, newImageName string, containerNames []string) (bool, error) {
 	manifestFile := fmt.Sprintf("%s/%s", repo.GetLocalDir(), deploymentFile)
 
 	// Read the YAML file
 	file, err := os.ReadFile(manifestFile)
 	if err != nil {
-		logrus.Fatalf("Error reading YAML file: %s", err)
+		return false, fmt.Errorf("error reading YAML file %s: %w", manifestFile, err)
 	}
 
 	//detect kind
 	var m manifest
 	err = yaml.Unmarshal(file, &m)
 	if err != nil {
-		logrus.Fatalf("Error parsing YAML file: %s", err)
+		return false, fmt.Errorf("error parsing YAML file %s: %w", manifestFile, err)
 	}
 
 	var maf GetContainersInterface
@@ -150,48 +154,47 @@ func patchContainerImage(deploymentFile string, repo *Repo, newImageName string,
 		var f DeploymentManifest
 		err = yaml.Unmarshal(file, &f)
 		if err != nil {
-			logrus.Fatalf("Error parsing YAML file: %s", err)
+			return false, fmt.Errorf("error parsing YAML file %s: %w", manifestFile, err)
 		}
 		maf = &f
 	case Job.String():
 		var f JobManifest
 		err = yaml.Unmarshal(file, &f)
 		if err != nil {
-			logrus.Fatalf("Error parsing YAML file: %s", err)
+			return false, fmt.Errorf("error parsing YAML file %s: %w", manifestFile, err)
 		}
 		maf = &f
 	case CronJob.String():
 		var f CronJobManifest
 		err = yaml.Unmarshal(file, &f)
 		if err != nil {
-			logrus.Fatalf("Error parsing YAML file: %s", err)
+			return false, fmt.Errorf("error parsing YAML file %s: %w", manifestFile, err)
 		}
 		maf = &f
 	default:
-		logrus.Fatalf("manifest %s not supported", m.Kind)
+		return false, fmt.Errorf("manifest %s not supported", m.Kind)
 	}
 
 	logrus.Infof("manifest: `%s`", deploymentFile)
-	success, setImageErr := SetImage(maf, newImageName, containerNames)
-	if setImageErr != nil {
-		logrus.Fatalf("error setting image: %s", setImageErr)
+	success, err := SetImage(maf, newImageName, containerNames)
+	if err != nil {
+		return false, fmt.Errorf("error setting image: %w", err)
 	}
 
 	if !success {
-		return false
+		return false, nil
 	}
 
-	updatedYaml, errYalmMarshal := yaml.Marshal(maf)
-	if errYalmMarshal != nil {
-		logrus.Fatalf("Error writing YAML file: %s", err)
+	updatedYaml, err := yaml.Marshal(maf)
+	if err != nil {
+		return false, fmt.Errorf("error writing YAML file %s: %w", manifestFile, err)
 	}
 
 	// Write the updated YAML back to the file
-	err = os.WriteFile(manifestFile, updatedYaml, 0644)
-	if err != nil {
-		logrus.Fatalf("Error writing YAML file: %s", err)
+	if err := os.WriteFile(manifestFile, updatedYaml, 0644); err != nil {
+		return false, fmt.Errorf("error writing YAML file %s: %w", manifestFile, err)
 	}
 
 	logrus.Debugln("Successfully updated image attribute in the Kubernetes deployment manifest")
-	return true
+	return true, nil
 }

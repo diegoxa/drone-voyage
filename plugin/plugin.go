@@ -6,8 +6,21 @@ package plugin
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	// maxPushAttempts bounds how many times CommitAndPush is retried when
+	// the remote branch moved in the meantime (another deploy raced us).
+	maxPushAttempts = 4
+
+	// baseRetryDelay/maxRetryDelay control the exponential backoff between
+	// push retries: 2s, 4s, 8s, capped at maxRetryDelay.
+	baseRetryDelay = 2 * time.Second
+	maxRetryDelay  = 10 * time.Second
 )
 
 // Args provides plugin execution arguments.
@@ -36,33 +49,74 @@ func Exec(ctx context.Context, args Args) error {
 	logrus.Printf("Deployment Files: %s", args.DeploymentFiles)
 	logrus.Printf("Container Names: %v", args.ContainerNames)
 
-	repo := cloneRepo(
+	repo, err := cloneRepo(
 		args.GithubRepo,
 		args.GithubSSHKey,
 		args.CommitAuthor,
 		args.CommitEmail,
 	)
+	if err != nil {
+		return err
+	}
 	defer repo.Cleanup()
 
-	done := UpdateImage(repo, args.DeploymentFiles, args.Image, args.ContainerNames)
-
-	if done {
-		repo.CommitAndPush()
-		logrus.Println("deployment file(s) updated")
-		return nil
-	}
-
-	logrus.Println("no deployment files were updated")
-	return nil
+	return updateAndPush(repo, args)
 }
 
-func cloneRepo(gitRepo, gitSSHKey, commitAuthor, commitEmail string) *Repo {
+// updateAndPush patches the manifests and pushes the result, retrying with
+// a fresh sync of the remote whenever the push is rejected because another
+// deploy landed first. Each retry reapplies the same edit on top of the
+// latest remote state instead of trying to merge or rebase shallow
+// history, which go-git can't do reliably.
+func updateAndPush(repo *Repo, args Args) error {
+	for attempt := 1; ; attempt++ {
+		updated, err := UpdateImage(repo, args.DeploymentFiles, args.Image, args.ContainerNames)
+		if err != nil {
+			return err
+		}
+
+		if !updated {
+			logrus.Println("no deployment files were updated")
+			return nil
+		}
+
+		err = repo.CommitAndPush()
+		if err == nil {
+			logrus.Println("deployment file(s) updated")
+			return nil
+		}
+
+		if !IsRemoteAheadErr(err) || attempt >= maxPushAttempts {
+			return fmt.Errorf("failed to push changes: %w", err)
+		}
+
+		delay := backoffDelay(attempt)
+		logrus.Warnf("remote was updated concurrently, retrying (%d/%d) in %s: %v", attempt, maxPushAttempts-1, delay, err)
+		time.Sleep(delay)
+
+		if err := repo.SyncWithRemote(); err != nil {
+			return fmt.Errorf("failed to sync with remote before retry: %w", err)
+		}
+	}
+}
+
+func backoffDelay(attempt int) time.Duration {
+	delay := baseRetryDelay * time.Duration(1<<uint(attempt-1))
+	if delay > maxRetryDelay {
+		delay = maxRetryDelay
+	}
+	return delay
+}
+
+func cloneRepo(gitRepo, gitSSHKey, commitAuthor, commitEmail string) (*Repo, error) {
 	repo := NewGitRepo(
 		gitRepo,
 		commitAuthor,
 		commitEmail,
 		gitSSHKey,
 	)
-	repo.Clone()
-	return repo
+	if err := repo.Clone(); err != nil {
+		return nil, err
+	}
+	return repo, nil
 }

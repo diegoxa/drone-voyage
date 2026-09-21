@@ -1,12 +1,15 @@
 package plugin
 
 import (
+	"errors"
+	"fmt"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/sirupsen/logrus"
@@ -19,6 +22,7 @@ type Repo struct {
 	CommitterName  string
 	CommitterEmail string
 	repository     *git.Repository
+	branch         string
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -47,38 +51,51 @@ func generateRandomString(n int) string {
 	return string(b)
 }
 
-func (project *Repo) Clone() {
+// Clone fetches only what the plugin needs: the latest state of the
+// default branch, with no history and no tags. A shallow (depth 1),
+// single-branch clone is enough since the plugin only ever reads and
+// rewrites the current version of a handful of manifest files.
+func (project *Repo) Clone() error {
 	logrus.Debugf("temp dir: %s\n", project.localDir)
 	project.Cleanup()
 
 	var err error
 	publicKeys, err = ssh.NewPublicKeys("git", []byte(project.sshKey), "")
 	if err != nil {
-		logrus.Fatal(err)
+		return fmt.Errorf("failed to parse ssh key: %w", err)
 	}
 
 	project.repository, err = git.PlainClone(project.localDir, false, &git.CloneOptions{
-		URL:      project.RepoGit,
-		Progress: os.Stdout,
-		Depth:    1,
-		Auth:     publicKeys,
+		URL:          project.RepoGit,
+		Progress:     os.Stdout,
+		Depth:        1,
+		SingleBranch: true,
+		Tags:         git.NoTags,
+		Auth:         publicKeys,
 	})
 	if err != nil {
-		logrus.Fatal(err)
+		return fmt.Errorf("failed to clone %s: %w", project.RepoGit, err)
 	}
+
+	head, err := project.repository.Head()
+	if err != nil {
+		return fmt.Errorf("failed to resolve HEAD: %w", err)
+	}
+	project.branch = head.Name().Short()
+
+	return nil
 }
 
-func (project *Repo) CommitAndPush() {
+func (project *Repo) CommitAndPush() error {
 	logrus.Println("commit and push")
 
 	worktree, err := project.repository.Worktree()
 	if err != nil {
-		logrus.Fatal(err)
+		return fmt.Errorf("failed to open worktree: %w", err)
 	}
 
-	_, err = worktree.Add(".")
-	if err != nil {
-		logrus.Fatal(err)
+	if _, err := worktree.Add("."); err != nil {
+		return fmt.Errorf("failed to stage changes: %w", err)
 	}
 
 	commitMsg := "update image"
@@ -89,17 +106,61 @@ func (project *Repo) CommitAndPush() {
 			When:  time.Now(),
 		},
 	})
-
 	if err != nil {
-		logrus.Fatal(err)
+		return fmt.Errorf("failed to commit: %w", err)
 	}
 
-	err = project.repository.Push(&git.PushOptions{
-		Auth: publicKeys,
+	if err := project.repository.Push(&git.PushOptions{Auth: publicKeys}); err != nil {
+		return fmt.Errorf("failed to push: %w", err)
+	}
+
+	return nil
+}
+
+// IsRemoteAheadErr reports whether err is a push rejection caused by the
+// remote branch having moved since the repo was cloned or last synced,
+// i.e. someone else pushed in the meantime. This is the only failure
+// CommitAndPush retries are meant to recover from.
+func IsRemoteAheadErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "non-fast-forward")
+}
+
+// SyncWithRemote fetches the latest commit on the tracked branch and hard
+// resets the working copy to it, discarding the local commit left behind
+// by a rejected CommitAndPush. Shallow history makes a real merge/rebase
+// unreliable, so instead of reconciling the two histories the plugin just
+// rebases its retry on whatever is on the remote right now: fetch, reset,
+// then reapply the same image edit and commit again.
+func (project *Repo) SyncWithRemote() error {
+	err := project.repository.Fetch(&git.FetchOptions{
+		RemoteName: "origin",
+		Auth:       publicKeys,
+		Depth:      1,
+		Force:      true,
+		Tags:       git.NoTags,
 	})
-	if err != nil {
-		logrus.Fatal(err)
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+		return fmt.Errorf("failed to fetch latest: %w", err)
 	}
+
+	remoteRef, err := project.repository.Reference(plumbing.NewRemoteReferenceName("origin", project.branch), true)
+	if err != nil {
+		return fmt.Errorf("failed to resolve origin/%s: %w", project.branch, err)
+	}
+
+	worktree, err := project.repository.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to open worktree: %w", err)
+	}
+
+	if err := worktree.Reset(&git.ResetOptions{
+		Commit: remoteRef.Hash(),
+		Mode:   git.HardReset,
+	}); err != nil {
+		return fmt.Errorf("failed to reset to origin/%s: %w", project.branch, err)
+	}
+
+	return nil
 }
 
 func (project *Repo) GetLocalDir() string {

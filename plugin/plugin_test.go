@@ -14,17 +14,23 @@ func TestPlugin(t *testing.T) {
 	sshKey := os.Getenv("GIT_SSH_KEY")
 	gitRepo := os.Getenv("GIT_REPO")
 
-	repo := cloneRepo(
+	repo, err := cloneRepo(
 		gitRepo,
 		sshKey,
 		"Deployer",
 		"email@email.com",
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer repo.Cleanup()
 
 	log.Println(repo.GetLocalDir())
 
-	done := UpdateImage(repo, []string{"folder/deployment.yaml", "folder2/migration-job.yaml"}, "docker/test:1", []string{})
+	done, err := UpdateImage(repo, []string{"folder/deployment.yaml", "folder2/migration-job.yaml"}, "docker/test:1", []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !done {
 		t.Log("no deployment files were updated")
 	}

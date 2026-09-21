@@ -19,6 +19,13 @@ The following settings changes this plugin's behavior.
 * commit_email (required) Email to be used on the commit.
 * log_level (optional) Log level. [info,debug]
 
+The plugin does a shallow, single-branch, tag-less clone (it only ever needs
+the current state of the manifest files, not history), then commits and
+pushes the image update. If the push is rejected because another build
+pushed to the same branch first, it re-fetches the latest commit, resets to
+it, reapplies the image change, and retries the push, backing off 2s, 4s,
+then 8s between attempts (4 attempts total) before giving up.
+
 Below is an example `.drone.yml` that uses this plugin.
 
 ```yaml
